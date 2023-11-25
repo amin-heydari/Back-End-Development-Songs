@@ -51,3 +51,66 @@ def parse_json(data):
 ######################################################################
 # INSERT CODE HERE
 ######################################################################
+from flask import Flask, jsonify
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "OK"})
+
+@app.route("/count")
+def count():
+    """Return length of data."""
+    count = db.songs.count_documents({})  # Count all documents
+    return jsonify({"count": count}), 200
+
+@app.route("/song", methods=["GET"])
+def songs():
+    """Return all songs."""
+    songs_cursor = db.songs.find({})
+    list_of_songs = [parse_json(song) for song in songs_cursor]  # Convert cursor to a list
+    return jsonify({"songs": list_of_songs}), 200
+
+@app.route("/song/<int:id>", methods=["GET"])
+def get_song_by_id(id):
+    """Return a song by its ID."""
+    song = db.songs.find_one({"id": id})
+    if not song:
+        return jsonify({"message": "song with id not found"}), 404
+    return jsonify(parse_json(song)), 200
+
+
+@app.route("/song", methods=["POST"])
+def create_song():
+    song_data = request.json
+    if db.songs.find_one({"id": song_data["id"]}):  # Check if song with given id exists
+        return jsonify({"Message": f"song with id {song_data['id']} already present"}), 302
+    result = db.songs.insert_one(song_data)  # Insert the new song
+    return jsonify({"inserted id": str(result.inserted_id)}), 201
+
+@app.route("/song/<int:id>", methods=["PUT"])
+def update_song(id):
+    song_data = request.json
+    song = db.songs.find_one({"id": id})
+    if not song:
+        return jsonify({"message": "song not found"}), 404
+    
+    update_result = db.songs.update_one(
+        {"id": id}, 
+        {"$set": song_data}
+    )
+
+    if update_result.modified_count == 0:
+        return jsonify({"message": "song found, but nothing updated"}), 200
+
+    updated_song = db.songs.find_one({"id": id})
+    return jsonify(parse_json(updated_song)), 200
+
+
+@app.route("/song/<int:id>", methods=["DELETE"])
+def delete_song(id):
+    delete_result = db.songs.delete_one({"id": id})
+    if delete_result.deleted_count == 0:
+        return jsonify({"message": "song not found"}), 404
+    
+    return '', 204  # HTTP 204 No Content
